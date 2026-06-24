@@ -1,7 +1,6 @@
-# ── Frontend Dockerfile ───────────────────────────────────────────────────────
 # Stage 1: build React app
 # Stage 2: serve with Nginx
-# ─────────────────────────────────────────────────────────────────────────────
+
 FROM node:18-alpine AS builder
 WORKDIR /app
 COPY frontend/package*.json ./
