@@ -146,22 +146,7 @@ jobs:
           kubectl rollout status deployment/frontend -n customer-app --timeout=120s
       - name: Verify
         run: |
-          echo "=== Pods ==="
           kubectl get pods --namespace customer-app
-          echo ""
-          echo "=== Services ==="
           kubectl get svc --namespace customer-app
-          echo ""
-          echo "=== Ingress ==="
           kubectl get ingress --namespace customer-app
-          
-      - name: Rollback on failure
-        if: failure()
-        run: |
-          echo "Deploy failed — rolling back to previous version"
-          kubectl rollout undo deployment/backend  --namespace customer-app
-          kubectl rollout undo deployment/frontend --namespace customer-app
-          kubectl rollout status deployment/backend  --namespace customer-app --timeout=60s
-          kubectl rollout status deployment/frontend --namespace customer-app --timeout=60s
-          echo "Rollback complete"
 
