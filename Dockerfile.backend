@@ -1,0 +1,14 @@
+# ── Backend Dockerfile ────────────────────────────────────────────────────────
+# Node.js 18 LTS · Express · port 3001
+# ─────────────────────────────────────────────────────────────────────────────
+FROM node:18-alpine AS base
+WORKDIR /app
+COPY backend/package*.json ./
+RUN npm ci --only=production
+
+FROM base AS final
+COPY backend/ .
+EXPOSE 3001
+ENV NODE_ENV=production
+USER node
+CMD ["node", "server.js"]
