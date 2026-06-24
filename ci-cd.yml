@@ -15,16 +15,34 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js 18
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
-      - run: npm ci
-      - run: cd backend && npm ci
-      - run: cd frontend && npm ci
-      - run: npm run test:frontend:unit
-      - run: npm run test:api:with:servers
+      - name: Install root dependencies
+        run: npm ci
+      - name: Install backend dependencies
+        run: npm run install:backend
+      - name: Install frontend dependencies
+        run: npm run install:frontend
+      - name: Run frontend unit tests
+        run: npm run test:frontend:unit
+        env:
+          CI: true
+      - name: Run API tests
+        run: npm run test:api:with:servers
+      - name: Run UI E2E tests
+        run: npm run test:frontend:with:server
+      - name: Upload Cypress screenshots on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: cypress-screenshots
+          path: cypress/screenshots/
+          retention-days: 7
 
   build-push:
     name: Build & Push
@@ -82,9 +100,22 @@ jobs:
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-      - run: terraform init
+      - name: Terraform Init
+        run: terraform init
+        env:
+          ARM_CLIENT_ID:       ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET:   ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID:       ${{ secrets.ARM_TENANT_ID }}
       - run: terraform validate
-      - run: terraform apply -auto-approve
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+        env:
+          ARM_CLIENT_ID:       ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET:   ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID:       ${{ secrets.ARM_TENANT_ID }}
+      - run: terraform apply -auto-approve tfplan
         env:
           ARM_CLIENT_ID:       ${{ secrets.ARM_CLIENT_ID }}
           ARM_CLIENT_SECRET:   ${{ secrets.ARM_CLIENT_SECRET }}
@@ -114,4 +145,23 @@ jobs:
           kubectl rollout status deployment/backend -n customer-app --timeout=120s
           kubectl rollout status deployment/frontend -n customer-app --timeout=120s
       - name: Verify
-        run: kubectl get pods,ingress -n customer-app
+        run: |
+          echo "=== Pods ==="
+          kubectl get pods --namespace customer-app
+          echo ""
+          echo "=== Services ==="
+          kubectl get svc --namespace customer-app
+          echo ""
+          echo "=== Ingress ==="
+          kubectl get ingress --namespace customer-app
+          
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Deploy failed — rolling back to previous version"
+          kubectl rollout undo deployment/backend  --namespace customer-app
+          kubectl rollout undo deployment/frontend --namespace customer-app
+          kubectl rollout status deployment/backend  --namespace customer-app --timeout=60s
+          kubectl rollout status deployment/frontend --namespace customer-app --timeout=60s
+          echo "Rollback complete"
+
